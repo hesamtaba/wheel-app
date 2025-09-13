@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>گردونه شانس</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      background: #f9f9f9;
+      color: #333;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    #wheelWrapper {
+      position: relative;
+      width: 400px;
+      height: 400px;
+      margin: 20px auto;
+    }
+    #wheelCanvas {
+      width: 100%;
+      height: 100%;
+    }
+    /* Arrow pointer */
+    #pointer {
+      position: absolute;
+      left: 50%;
+      top: -4px;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 12px solid transparent;
+      border-right: 12px solid transparent;
+      border-bottom: 24px solid #d90000;
+    }
+    .form {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+    .form input {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .form button {
+      padding: 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 4px;
+      background: #007bff;
+      color: #fff;
+      cursor: pointer;
+    }
+    .form button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    #resultBox {
+      margin-top: 20px;
+      padding: 12px;
+      background: #e6ffe6;
+      border: 1px solid #28a745;
+      border-radius: 4px;
+      display: none;
+    }
+    #resultBox strong {
+      color: #155724;
+    }
+    #error {
+      color: #c00;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>گردونه شانس</h1>
+    <div id="wheelWrapper">
+      <canvas id="wheelCanvas" width="400" height="400"></canvas>
+      <div id="pointer"></div>
+    </div>
+    <div class="form">
+      <input type="text" id="nameInput" placeholder="نام شما">
+      <input type="text" id="phoneInput" placeholder="شماره تماس شما">
+      <button id="spinButton">چرخش</button>
+      <div id="error"></div>
+    </div>
+    <div id="resultBox"><strong>نتیجه شما:</strong> <span id="resultText"></span></div>
+  </div>
+<script>
+(function() {
+  // Utility to get query parameter by name
+  function getQueryParam(name) {
+    const params = new URLSearchParams(window.location.search);
+    return params.get(name);
+  }
+  const wheelId = getQueryParam('id');
+  const canvas = document.getElementById('wheelCanvas');
+  const ctx = canvas.getContext('2d');
+  const spinButton = document.getElementById('spinButton');
+  const nameInput = document.getElementById('nameInput');
+  const phoneInput = document.getElementById('phoneInput');
+  const resultBox = document.getElementById('resultBox');
+  const resultText = document.getElementById('resultText');
+  const errorEl = document.getElementById('error');
+  let options = [];
+  let segments = [];
+  let spinning = false;
+  // Predefined colours for segments
+  const colours = ['#ff7675','#74b9ff','#55efc4','#ffeaa7','#fd79a8','#a29bfe','#81ecec','#fab1a0','#e17055','#00b894','#0984e3','#fdcb6e','#e84393','#6c5ce7','#00cec9','#e74c3c','#2ecc71','#f1c40f','#3498db'];
+  // Fetch wheel definition
+  async function loadWheel() {
+    if (!wheelId) {
+      errorEl.textContent = 'شناسه گردونه یافت نشد.';
+      spinButton.disabled = true;
+      return;
+    }
+    try {
+      const response = await fetch(`/api/wheel/${wheelId}`);
+      const data = await response.json();
+      if (!response.ok) {
+        errorEl.textContent = data.error || 'خطای بارگذاری گردونه';
+        spinButton.disabled = true;
+        return;
+      }
+      options = data.options;
+      if (!options || options.length === 0) {
+        errorEl.textContent = 'گزینه‌ای برای گردونه تعریف نشده است.';
+        spinButton.disabled = true;
+        return;
+      }
+      prepareSegments();
+      drawWheel(0);
+    } catch (err) {
+      console.error(err);
+      errorEl.textContent = 'خطای ارتباطی در بارگذاری گردونه';
+      spinButton.disabled = true;
+    }
+  }
+  // Prepare segments (start and end angles in degrees) based on weights
+  function prepareSegments() {
+    const total = options.reduce((sum, opt) => sum + opt.weight, 0);
+    let start = 0;
+    segments = options.map((opt, index) => {
+      const angle = (opt.weight / total) * 360;
+      const seg = {
+        label: opt.label,
+        weight: opt.weight,
+        startDeg: start,
+        endDeg: start + angle,
+        color: colours[index % colours.length]
+      };
+      start += angle;
+      return seg;
+    });
+  }
+  // Draw wheel at a specific rotation in degrees
+  function drawWheel(rotationDeg) {
+    const radius = canvas.width / 2;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    // Move to centre
+    ctx.translate(radius, radius);
+    // Rotate whole wheel
+    ctx.rotate((rotationDeg) * Math.PI / 180);
+    // Draw each segment
+    segments.forEach(seg => {
+      const startRad = (seg.startDeg - 90) * Math.PI / 180;
+      const endRad   = (seg.endDeg - 90) * Math.PI / 180;
+      // Segment wedge
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.arc(0,0,radius,startRad,endRad);
+      ctx.closePath();
+      ctx.fillStyle = seg.color;
+      ctx.fill();
+      // Draw segment label at its middle angle
+      const midDeg = (seg.startDeg + seg.endDeg) / 2;
+      const midRad = (midDeg - 90) * Math.PI / 180;
+      const textRadius = radius * 0.65;
+      ctx.save();
+      ctx.rotate(midRad);
+      ctx.translate(0, -textRadius);
+      ctx.rotate(Math.PI / 2);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(seg.label, 0, 0);
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+  // Compute segment by result label
+  function findSegmentByLabel(label) {
+    return segments.find(seg => seg.label === label);
+  }
+  // Spin wheel animation and call API
+  async function spinWheel() {
+    if (spinning) return;
+    const name = nameInput.value.trim();
+    const phone = phoneInput.value.trim();
+    errorEl.textContent = '';
+    resultBox.style.display = 'none';
+    if (!name || !phone) {
+      errorEl.textContent = 'لطفاً نام و شماره تماس خود را وارد کنید.';
+      return;
+    }
+    spinning = true;
+    spinButton.disabled = true;
+    try {
+      // Call API to spin and determine result
+      const response = await fetch(`/api/wheel/${wheelId}/spin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        errorEl.textContent = data.error || 'خطا در پردازش چرخش';
+        spinning = false;
+        spinButton.disabled = false;
+        return;
+      }
+      const chosenLabel = data.result;
+      const seg = findSegmentByLabel(chosenLabel);
+      if (!seg) {
+        // fallback in case label not found
+        console.warn('Selected label not found in segments', chosenLabel);
+      }
+      // Determine target angle (centre of selected segment)
+      const midDeg = seg ? (seg.startDeg + seg.endDeg) / 2 : 0;
+      // Number of full spins
+      const spins = 5;
+      const finalRotation = spins * 360 + (360 - midDeg);
+      // Apply CSS transform for animation
+      const wrapper = document.getElementById('wheelWrapper');
+      wrapper.style.transition = 'transform 5s cubic-bezier(0.33, 1, 0.68, 1)';
+      wrapper.style.transform = `rotate(${finalRotation}deg)`;
+      // After animation ends, show result and reset state
+      wrapper.addEventListener('transitionend', function handler() {
+        wrapper.removeEventListener('transitionend', handler);
+        spinning = false;
+        spinButton.disabled = false;
+        // Keep the rotation so next spin starts from current orientation
+        // Compute rotation modulo 360 to avoid large values
+        const currentRotation = finalRotation % 360;
+        wrapper.style.transition = '';
+        wrapper.style.transform = `rotate(${currentRotation}deg)`;
+        // Display result
+        resultText.textContent = chosenLabel;
+        resultBox.style.display = 'block';
+      }, { once: true });
+    } catch (err) {
+      console.error(err);
+      errorEl.textContent = 'خطایی در برقراری ارتباط رخ داد.';
+      spinning = false;
+      spinButton.disabled = false;
+    }
+  }
+  spinButton.addEventListener('click', spinWheel);
+  loadWheel();
+})();
+</script>
+</body>
+</html>

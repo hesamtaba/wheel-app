@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نتایج گردونه</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f4f4f4;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 10px;
+      text-align: right;
+    }
+    th {
+      background: #e9ecef;
+    }
+    tr:nth-child(even) td {
+      background: #f9f9f9;
+    }
+    #error {
+      color: #c00;
+      margin-top: 10px;
+      text-align: center;
+    }
+    #noResults {
+      text-align: center;
+      margin-top: 20px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>نتایج گردونه</h1>
+    <table id="resultsTable" style="display: none;">
+      <thead>
+        <tr>
+          <th>نام</th>
+          <th>شماره تماس</th>
+          <th>نتیجه</th>
+          <th>زمان</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody">
+      </tbody>
+    </table>
+    <div id="noResults">هیچ نتیجه‌ای ثبت نشده است.</div>
+    <div id="error"></div>
+  </div>
+<script>
+(function() {
+  function getQueryParam(name) {
+    const params = new URLSearchParams(window.location.search);
+    return params.get(name);
+  }
+  const wheelId = getQueryParam('id');
+  const resultsTable = document.getElementById('resultsTable');
+  const resultsBody = document.getElementById('resultsBody');
+  const noResultsDiv = document.getElementById('noResults');
+  const errorEl = document.getElementById('error');
+  async function loadResults() {
+    if (!wheelId) {
+      errorEl.textContent = 'شناسه گردونه یافت نشد.';
+      return;
+    }
+    try {
+      const response = await fetch(`/api/wheel/${wheelId}/results`);
+      const data = await response.json();
+      if (!response.ok) {
+        errorEl.textContent = data.error || 'خطا در بارگذاری نتایج';
+        return;
+      }
+      const results = data.results;
+      if (!results || results.length === 0) {
+        noResultsDiv.style.display = 'block';
+        resultsTable.style.display = 'none';
+        return;
+      }
+      noResultsDiv.style.display = 'none';
+      resultsTable.style.display = 'table';
+      // Clear existing rows
+      resultsBody.innerHTML = '';
+      results.forEach(item => {
+        const tr = document.createElement('tr');
+        const date = new Date(item.timestamp);
+        // Format date/time as local string
+        const formatter = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'short', timeStyle: 'short' });
+        const formatted = formatter.format(date);
+        tr.innerHTML = `<td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.phone)}</td><td>${escapeHtml(item.result)}</td><td>${formatted}</td>`;
+        resultsBody.appendChild(tr);
+      });
+    } catch (err) {
+      console.error(err);
+      errorEl.textContent = 'خطایی در برقراری ارتباط رخ داده است.';
+    }
+  }
+  // Escape HTML to avoid injection when displaying user data
+  function escapeHtml(text) {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+  // Load results on page load
+  loadResults();
+})();
+</script>
+</body>
+</html>

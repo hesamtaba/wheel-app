@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ساخت گردونه شانس</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f7f7f7;
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      margin-top: 40px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 8px;
+      text-align: right;
+    }
+    th {
+      background: #f0f0f0;
+    }
+    tr:nth-child(even) {
+      background: #fafafa;
+    }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 6px;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .add-btn {
+      background: #007bff;
+      color: #fff;
+      margin-top: 10px;
+    }
+    .create-btn {
+      background: #28a745;
+      color: #fff;
+      margin-top: 20px;
+      width: 100%;
+    }
+    .links {
+      margin-top: 20px;
+      padding: 10px;
+      background: #e9ffe9;
+      border: 1px solid #28a745;
+      border-radius: 4px;
+      display: none;
+    }
+    .links a {
+      display: block;
+      margin-top: 8px;
+      word-break: break-all;
+      color: #007bff;
+    }
+    .error {
+      color: #c00;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ساخت گردونه شانس</h1>
+    <p>گزینه‌ها و شانس (وزن) هر گزینه را تعریف کنید و سپس گردونه را ایجاد نمایید. پس از ایجاد، لینک گردونه و صفحه نتایج در اختیار شما قرار می‌گیرد.</p>
+    <table id="optionsTable">
+      <thead>
+        <tr>
+          <th>عنوان گزینه</th>
+          <th>شانس (وزن)</th>
+        </tr>
+      </thead>
+      <tbody id="optionsBody">
+        <!-- Rows inserted here dynamically -->
+      </tbody>
+    </table>
+    <button type="button" class="add-btn" id="addOptionBtn">افزودن گزینه</button>
+    <button type="button" class="create-btn" id="createWheelBtn">ساختن گردونه</button>
+    <div id="error" class="error"></div>
+    <div id="links" class="links">
+      <strong>لینک گردونه:</strong>
+      <a id="wheelLink" href="#" target="_blank"></a>
+      <strong>لینک نتایج:</strong>
+      <a id="resultsLink" href="#" target="_blank"></a>
+    </div>
+  </div>
+<script>
+// Add a new option row to the table
+function addOptionRow(label = '', weight = '') {
+  const tbody = document.getElementById('optionsBody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><input type="text" placeholder="نام گزینه" value="${label}"></td><td><input type="number" min="1" step="1" placeholder="وزن" value="${weight}"></td>`;
+  tbody.appendChild(tr);
+}
+// Add two default rows to start with
+document.addEventListener('DOMContentLoaded', () => {
+  addOptionRow();
+  addOptionRow();
+});
+// Handle add option button
+document.getElementById('addOptionBtn').addEventListener('click', () => {
+  addOptionRow();
+});
+// Handle create wheel button
+document.getElementById('createWheelBtn').addEventListener('click', async () => {
+  const errorEl = document.getElementById('error');
+  errorEl.textContent = '';
+  const rows = Array.from(document.querySelectorAll('#optionsBody tr'));
+  const options = [];
+  for (const row of rows) {
+    const inputs = row.querySelectorAll('input');
+    const label = inputs[0].value.trim();
+    const weight = Number(inputs[1].value);
+    if (!label || !Number.isFinite(weight) || weight <= 0) {
+      errorEl.textContent = 'لطفاً تمام گزینه‌ها را با نام و وزن معتبر پر کنید.';
+      return;
+    }
+    options.push({ label, weight });
+  }
+  if (options.length === 0) {
+    errorEl.textContent = 'حداقل یک گزینه مورد نیاز است.';
+    return;
+  }
+  try {
+    const response = await fetch('/api/wheels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ options })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      errorEl.textContent = data.error || 'خطا در ایجاد گردونه';
+      return;
+    }
+    const wheelLinkEl = document.getElementById('wheelLink');
+    const resultsLinkEl = document.getElementById('resultsLink');
+    const linksDiv = document.getElementById('links');
+    wheelLinkEl.href = data.link;
+    wheelLinkEl.textContent = window.location.origin + data.link;
+    resultsLinkEl.href = data.resultsLink;
+    resultsLinkEl.textContent = window.location.origin + data.resultsLink;
+    linksDiv.style.display = 'block';
+    // Scroll to links
+    linksDiv.scrollIntoView({ behavior: 'smooth' });
+  } catch (err) {
+    console.error(err);
+    errorEl.textContent = 'خطایی در برقراری ارتباط رخ داده است.';
+  }
+});
+</script>
+</body>
+</html>
